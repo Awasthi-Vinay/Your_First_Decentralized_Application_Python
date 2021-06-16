@@ -3,7 +3,8 @@
 # this tutorial so the flask code won't be commented. that way we can focus on
 # how we're working with our smart contract
 from flask import Flask, request, render_template
-
+from flask import flash
+from flask import session
 # solc is needed to compile our Solidity code
 from solc import compile_source
 
@@ -13,9 +14,13 @@ from web3 import Web3, HTTPProvider
 # we'll use ConciseContract to interact with our specific instance of the contract
 from web3.contract import ConciseContract
 
+# Infineon blocksec2go library to communicate with Infineon's Security2Go Starterkit R1 for Blockchain
+from blocksec2go import open_pyscard, CardError
+import handle_Transaction
+
 # initialize our flask app
 app = Flask(__name__)
-
+app.secret_key = "abc"
 # declare the candidates we're allowing people to vote for.
 # note that each name is in bytes because our contract variable
 # candidateList is type bytes32[]
@@ -79,7 +84,7 @@ transaction_hash = contract_constructor.transact(transaction_details)
 # to get the full transaction details, then we get the contract address from there
 transaction_receipt = eth_provider.getTransactionReceipt(transaction_hash)
 contract_address = transaction_receipt['contractAddress']
-
+print("contract Address : ", contract_address)
 contract_instance = eth_provider.contract(
     abi=contract_abi,
     address=contract_address,
@@ -94,21 +99,38 @@ contract_instance = eth_provider.contract(
 @app.route('/', methods=['GET', 'POST'])
 def index():
     alert = ''
+    reader = ""
     candidate_name = request.form.get('candidate')
+    session.pop('_flashes', None)
+
     if request.method == 'POST' and candidate_name:
         # if we want to pass a candidate name to our contract then we have to convert it to bytes
         candidate_name_bytes = candidate_name.encode()
         try:
-            # the typical behavior of a solidity function is to validate inputs before
-            # executing the function. remember that work on the chain is permanent so
-            # we really want to be sure we're running it when appropriate.
-            #
-            # in the case of voteForCandidate, we check to see that the passed in name
-            # is actually one of the candidates we specified on deployment. if it's not,
-            # the contract will throw a ValueError which we want to catch
-            contract_instance.voteForCandidate(candidate_name_bytes, transact=transaction_details)
-        except ValueError:
-            alert = f'{candidate_name} is not a voting option!'
+            reader = open_pyscard(None)
+        except Exception as err:
+            print("err")
+            alert = f'No Reader detected with Security2Go Starterkit R1 Card on it.'
+        if reader != "":
+            try:
+                # the typical behavior of a solidity function is to validate inputs before
+                # executing the function. remember that work on the chain is permanent so
+                # we really want to be sure we're running it when appropriate.
+                #
+                # in the case of voteForCandidate, we check to see that the passed in name
+                # is actually one of the candidates we specified on deployment. if it's not,
+                # the contract will throw a ValueError which we want to catch
+                nonce, balance, receipt = handle_Transaction.sendTransaction(reader, contract_abi, contract_address, candidate_name)
+
+                txn_msg = "Vote Transaction Successful; Transaction_Hash: "+ receipt['transactionHash'].hex() +"; Transaction_Nonce: "+str(nonce)+"; Transaction_Block: "+str(receipt['blockNumber'])+"; Transaction_From: "+receipt['from']+"; Transaction_to: "+receipt['to']+"; Transaction_Gas: "+str(receipt['gasUsed'])+"; Voted For Candidate: "+candidate_name +"; Account Balance(Ethers): "+ str(balance)
+                alert = f'{txn_msg}'
+
+                #alert = f'Vote for Candidate : {candidate_name} casted Successfuly.'
+
+            except Exception as err:
+                print("Error: ", err)
+                message = str(err)
+                alert = f'Exception: {message}'
 
     # the web3py wrapper will take the bytes32[] type returned by getCandidateList()
     # and convert it to a list of strings

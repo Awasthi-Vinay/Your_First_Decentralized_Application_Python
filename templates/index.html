@@ -8,10 +8,33 @@
         <!-- Bootstrap CSS -->
         <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
 
-        <title>Hello World DApp</title>
+        <title>Voting DApp</title>
     </head>
     <body class="container">
+{% block content %}
+<div id="flash" class="container">
+    {% for message in get_flashed_messages() %}
+    <div class="alert alert-warning">
+        <button id="fclose" type="button" class="close" data-dismiss="alert">&times;</button>
+        {{ message }}
+    </div>
+    {% endfor %}
 
+    {% block page_content %}{% endblock %}
+
+</div>
+{% endblock %}
+<script>
+const targetDiv = document.getElementById("flash");
+const btn = document.getElementById("fclose");
+btn.onclick = function () {
+  if (targetDiv.style.display !== "none") {
+    targetDiv.style.display = "none";
+  } else {
+    targetDiv.style.display = "block";
+  }
+};
+</script>
         <div class="row">
             <div class="col">
                 <h1>A Simple Hello World Voting Application</h1>
